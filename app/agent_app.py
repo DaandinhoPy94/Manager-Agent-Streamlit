@@ -25,6 +25,7 @@ if platform.system() == "Linux":
 
 # --- LANGCHAIN IMPORTS ---
 from langchain.agents import AgentExecutor, create_structured_chat_agent
+from langchain.agents.structured_chat.prompt import render_structured_chat_prompt
 from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
@@ -81,15 +82,14 @@ def setup_agent(_groq_api_key):
     all_tools = sql_tools + [rag_tool]
 
     # --- DE PROMPT ---
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", "You are a helpful assistant."),
-            MessagesPlaceholder("chat_history", optional=True),
-            ("human", "{input}"),
-            MessagesPlaceholder("agent_scratchpad"),
-        ]
-    )
-
+    # We bouwen de prompt dynamisch op basis van de tools.
+    # Dit zorgt ervoor dat de 'tools' en 'tool_names' variabelen correct worden gevuld.
+    prompt = render_structured_chat_prompt(
+        tools=all_tools,
+        # Voeg de conversationele placeholders toe
+        input_variables=["input", "chat_history"],
+        memory_prompts=[MessagesPlaceholder("chat_history", optional=True)],
+)
     # --- HET GEHEUGEN ---
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
