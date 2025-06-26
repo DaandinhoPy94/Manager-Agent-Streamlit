@@ -15,11 +15,16 @@ ROOT_DIR = os.path.join(SCRIPT_DIR, '..')
 
 # --- SQLITE FIX VOOR STREAMLIT CLOUD ---
 import sys
-import pysqlite3
-sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+import platform
+
+# Alleen op Linux-systemen (zoals Streamlit Cloud) de sqlite3 module vervangen.
+# Op Windows en macOS wordt dit blok overgeslagen.
+if platform.system() == "Linux":
+    import pysqlite3
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 # --- LANGCHAIN IMPORTS ---
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import AgentExecutor, create_structured_chat_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
@@ -89,7 +94,8 @@ def setup_agent(_groq_api_key):
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
     # --- De "Manager" (De Agent) ---
-    agent = create_react_agent(llm, all_tools, prompt)
+    # We gebruiken create_structured_chat_agent, die beter omgaat met complexe tools en prompts.
+    agent = create_structured_chat_agent(llm, all_tools, prompt)
 
     agent_executor = AgentExecutor(
         agent=agent,
