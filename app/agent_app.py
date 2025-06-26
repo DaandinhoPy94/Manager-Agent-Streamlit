@@ -2,6 +2,12 @@ import streamlit as st
 import os
 import pandas as pd  # Toegevoegd voor het lezen van de portfolio tabel
 import time  # Voor retry mechanisme
+# --- PADEN CONFIGURATIE ---
+# Dit zorgt ervoor dat de paden altijd kloppen, zowel lokaal als op Streamlit.
+# __file__ is het pad naar het huidige script (app/agent_app.py)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) 
+# We gaan een map 'omhoog' om in de hoofdmap (ManagerAgent) te komen.
+ROOT_DIR = os.path.join(SCRIPT_DIR, '..')
 # --- SQLite fix voor Streamlit Cloud ----------------------------------------
 import sys, pysqlite3               # vervangt oude sqlite op Linux
 sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
@@ -19,8 +25,8 @@ from langchain import hub # Nieuwe import voor de prompt
 st.set_page_config(page_title="AgentManagerGPT", page_icon="🧑‍💼", layout="wide")
 
 # --- DATABASE & VECTORSTORE VERBINDING ---
-DB_PATH = os.path.join('data', 'portfolio.db')
-VS_PATH = "vectorstore"
+DB_PATH = os.path.join(ROOT_DIR, 'data', 'portfolio.db')
+VS_PATH = os.path.join(ROOT_DIR, 'vectorstore')
 
 @st.cache_resource
 def setup_agent(_groq_api_key):
@@ -100,27 +106,37 @@ st.title("🧑‍💼 AgentManagerGPT")
 st.markdown("Stel een vraag aan de Onderzoeksmanager. Hij kiest de juiste specialist voor de klus.")
 
 # --- API KEY HANDLING ---
-if "api_key_entered" not in st.session_state:
-    st.session_state.api_key_entered = False
+groq_api_key = "" # Initialiseer de variabele
 
-if not st.session_state.api_key_entered:
-    groq_api_key = st.text_input("Voer je Groq API Key in (begint met gsk_...):", type="password")
-    if groq_api_key:
-        st.session_state.groq_api_key = groq_api_key
-        st.session_state.api_key_entered = True
-        st.rerun()
-else:
-    groq_api_key = st.session_state.groq_api_key
-    st.success("✅ API Key is ingesteld")
+try:
+    # Prioriteit 1: Probeer de key uit Streamlit's Secrets te halen (voor deployment)
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+    st.sidebar.success("✅ API Key gevonden in Secrets!")
+except KeyError:
+    # Prioriteit 2: Als Secrets niet bestaan, toon een invoerveld (voor lokaal testen)
+    st.sidebar.warning("API Key niet gevonden in Secrets.")
+    groq_api_key = st.sidebar.text_input(
+        "Voer je Groq API Key in:", 
+        type="password", 
+        key="local_api_key" # Geef het een unieke key
+    )
 
-if not st.session_state.api_key_entered:
-    st.info("Voer alsjeblieft je Groq API key in om de app te starten.")
+# Stop de app als er GEEN key is, lokaal of uit secrets.
+if not groq_api_key:
+    st.info("Voer een Groq API key in via de sidebar om de app te starten.")
     st.stop()
+
+# Belangrijk: De setup_agent functie moet NU pas worden aangeroepen
+agent_executor = setup_agent(groq_api_key)
 
 # --- PORTFOLIO TABEL WEERGEVEN ---
 with st.expander("📊 Bekijk Portfolio Data", expanded=False):
     try:
-        df = pd.read_csv(os.path.join('data', 'portfolio.csv'))
+        # --- HIER IS DE WIJZIGING ---
+        csv_path = os.path.join(ROOT_DIR, 'data', 'portfolio.csv') # <-- Precies dezelfde inspringing
+        df = pd.read_csv(csv_path)                                  # <-- Precies dezelfde inspringing
+        # ---------------------------
+
         st.dataframe(df, use_container_width=True, height=400)
         
         # Basis statistieken
@@ -128,11 +144,11 @@ with st.expander("📊 Bekijk Portfolio Data", expanded=False):
         with col1:
             st.metric("Totaal aantal panden", len(df))
         with col2:
-            st.metric("Totale waarde", f"€{df['Value'].sum():,.0f}")
+            st.metric("Totale waarde", f"€{df['value'].sum():,.0f}")  # Let op: 'Value' -> 'value' als je kolomnamen hebt opgeschoond
         with col3:
-            st.metric("Gem. leegstand", f"{df['VacancyRate'].mean()*100:.1f}%")
+            st.metric("Gem. leegstand", f"{df['vacancyrate'].mean()*100:.1f}%")
         with col4:
-            st.metric("Totale jaarinkomsten", f"€{df['AnualIncome'].sum():,.0f}")
+            st.metric("Totale jaarinkomsten", f"€{df['anualincome'].sum():,.0f}")
     except Exception as e:
         st.error(f"Kon portfolio data niet laden: {e}")
 
