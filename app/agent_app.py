@@ -108,22 +108,37 @@ def setup_agent(_groq_api_key):
 st.title("🧑‍💼 AgentManagerGPT")
 st.markdown("Stel een vraag aan de Onderzoeksmanager. Hij kiest de juiste specialist voor de klus.")
 
-# --- API KEY HANDLING ---
+# --- NIEUWE, DRIETRAPS API KEY HANDLING ---
+from dotenv import load_dotenv # Voeg deze import toe bovenaan je script!
+
+# ... (in de body van je script)
+
 groq_api_key = ""
+
 try:
+    # Prioriteit 1: Streamlit Cloud Secrets (voor deployment)
     groq_api_key = st.secrets["GROQ_API_KEY"]
-    st.sidebar.success("✅ API Key gevonden in Secrets!")
-except KeyError:
-    st.sidebar.warning("API Key niet gevonden in Secrets.")
-    groq_api_key = st.sidebar.text_input(
-        "Voer je Groq API Key in:",
-        type="password",
-        key="local_api_key"
-    )
+    st.sidebar.success("✅ API Key geladen via Streamlit Secrets!")
+except (KeyError, FileNotFoundError):
+    # Prioriteit 2: Lokaal .env bestand
+    # Deze code wordt overgeslagen op Streamlit Cloud omdat .env daar niet bestaat
+    if load_dotenv(find_dot_env=True):
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        st.sidebar.success("✅ API Key geladen via lokaal .env bestand!")
+    else:
+        # Prioriteit 3: Handmatige invoer als laatste redmiddel
+        st.sidebar.warning("Geen API Key gevonden. Voer handmatig in.")
+        groq_api_key = st.sidebar.text_input(
+            "Voer je Groq API Key in:",
+            type="password",
+            key="local_api_key"
+        )
 
 if not groq_api_key:
-    st.info("Voer een Groq API key in via de sidebar om de app te starten.")
+    st.info("Voer een Groq API key in om de app te starten.")
     st.stop()
+    
+
 
 # Belangrijk: De setup_agent functie moet NU pas worden aangeroepen
 agent_executor = setup_agent(groq_api_key)
