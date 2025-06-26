@@ -108,36 +108,46 @@ def setup_agent(_groq_api_key):
 st.title("🧑‍💼 AgentManagerGPT")
 st.markdown("Stel een vraag aan de Onderzoeksmanager. Hij kiest de juiste specialist voor de klus.")
 
-# --- NIEUWE, DRIETRAPS API KEY HANDLING ---
-from dotenv import load_dotenv # Voeg deze import toe bovenaan je script!
+# --- DEFINITIEVE, ROBUUSTE API KEY HANDLING ---
 
-# ... (in de body van je script)
+# Voeg deze imports toe bovenaan je script, bij de andere imports
+from dotenv import load_dotenv
+import os
+
+# ... (in de body van je script, na de imports) ...
 
 groq_api_key = ""
 
-try:
-    # Prioriteit 1: Streamlit Cloud Secrets (voor deployment)
-    groq_api_key = st.secrets["GROQ_API_KEY"]
-    st.sidebar.success("✅ API Key geladen via Streamlit Secrets!")
-except (KeyError, FileNotFoundError):
-    # Prioriteit 2: Lokaal .env bestand
-    # Deze code wordt overgeslagen op Streamlit Cloud omdat .env daar niet bestaat
-    if load_dotenv(find_dot_env=True):
-        groq_api_key = os.getenv("GROQ_API_KEY")
+# EERSTE POGING: Streamlit Cloud Secrets (voor productie)
+# os.environ.get("STREAMLIT_SERVER_ENABLED") is een betrouwbare manier om te checken of we op de cloud draaien.
+if os.environ.get("STREAMLIT_SERVER_ENABLED"):
+    try:
+        groq_api_key = st.secrets["GROQ_API_KEY"]
+        st.sidebar.success("✅ API Key geladen via Streamlit Secrets!")
+    except KeyError:
+        st.sidebar.error("❌ Geen API Key gevonden in Streamlit Secrets!")
+        st.stop()
+
+# TWEEDE POGING: Lokaal .env bestand (voor ontwikkeling)
+else:
+    load_dotenv() # Simpele aanroep, laadt .env uit de hoofdmap
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
         st.sidebar.success("✅ API Key geladen via lokaal .env bestand!")
     else:
-        # Prioriteit 3: Handmatige invoer als laatste redmiddel
-        st.sidebar.warning("Geen API Key gevonden. Voer handmatig in.")
+        # LAATSTE REDMIDDEL: Handmatige invoer
+        st.sidebar.warning("Geen .env bestand gevonden. Voer key handmatig in.")
         groq_api_key = st.sidebar.text_input(
             "Voer je Groq API Key in:",
             type="password",
             key="local_api_key"
         )
 
+# Stop de app als er na alle pogingen nog steeds geen key is.
 if not groq_api_key:
-    st.info("Voer een Groq API key in om de app te starten.")
+    st.info("API Key is vereist. Voer deze in via de sidebar of een .env bestand.")
     st.stop()
-    
+
 
 
 # Belangrijk: De setup_agent functie moet NU pas worden aangeroepen
