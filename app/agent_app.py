@@ -17,6 +17,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -63,8 +64,19 @@ def setup_agent(_groq_api_key):
     )
     all_tools = sql_tools + [rag_tool]
 
-    # --- DE PROMPT ---
-    prompt = hub.pull("hwchase17/react-chat-conversational")
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+# --- DE PROMPT ---
+# We bouwen de prompt zelf om onafhankelijk te zijn van de LangChain Hub.
+# Dit is een standaard ReAct-prompt die geheugen ondersteunt.
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "You are a helpful assistant."),
+        MessagesPlaceholder("chat_history", optional=True),
+        ("human", "{input}"),
+        MessagesPlaceholder("agent_scratchpad"),
+    ]
+)
     
     # --- HET GEHEUGEN ---
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
