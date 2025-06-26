@@ -132,23 +132,28 @@ agent_executor = setup_agent(groq_api_key)
 # --- PORTFOLIO TABEL WEERGEVEN ---
 with st.expander("📊 Bekijk Portfolio Data", expanded=False):
     try:
-        # --- HIER IS DE WIJZIGING ---
-        csv_path = os.path.join(ROOT_DIR, 'data', 'portfolio.csv') # <-- Precies dezelfde inspringing
-        df = pd.read_csv(csv_path)                                  # <-- Precies dezelfde inspringing
-        # ---------------------------
+        # Stap 1: Laad het CSV bestand
+        csv_path = os.path.join(ROOT_DIR, 'data', 'portfolio.csv')
+        df = pd.read_csv(csv_path)
 
+        # Stap 2: DE CRUCIALE AANPASSING - Maak kolomnamen hier ook klein
+        # Dit zorgt ervoor dat de rest van de code altijd werkt.
+        df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
+
+        # Stap 3: Toon de tabel
         st.dataframe(df, use_container_width=True, height=400)
         
-        # Basis statistieken
+        # Stap 4: Bereken statistieken (dit werkt nu gegarandeerd)
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Totaal aantal panden", len(df))
         with col2:
-            st.metric("Totale waarde", f"€{df['value'].sum():,.0f}")  # Let op: 'Value' -> 'value' als je kolomnamen hebt opgeschoond
+            st.metric("Totale waarde", f"€{df['value'].sum():,.0f}")
         with col3:
             st.metric("Gem. leegstand", f"{df['vacancyrate'].mean()*100:.1f}%")
         with col4:
             st.metric("Totale jaarinkomsten", f"€{df['anualincome'].sum():,.0f}")
+            
     except Exception as e:
         st.error(f"Kon portfolio data niet laden: {e}")
 
