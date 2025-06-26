@@ -79,20 +79,20 @@ prompt = ChatPromptTemplate.from_messages(
 )
     
     # --- HET GEHEUGEN ---
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
     # --- De "Manager" (De Agent) ---
-    agent = create_react_agent(llm, all_tools, prompt)
+agent = create_react_agent(llm, all_tools, prompt)
     
-    agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=all_tools, 
-        memory=memory,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
+agent_executor = AgentExecutor(
+    agent=agent, 
+    tools=all_tools, 
+    memory=memory,
+    verbose=True,
+    handle_parsing_errors=True,
+    max_iterations=10,
         # NIEUW: Geef de LLM expliciet mee als er twijfel is
-        llm=llm 
+    llm=llm 
     )
     
     print("Agent succesvol opgezet met geheugen!")
