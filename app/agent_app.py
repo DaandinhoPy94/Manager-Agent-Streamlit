@@ -36,19 +36,37 @@ def setup_agent(_groq_api_key):
     """
     print("Agent wordt opgezet...")
     
-    # --- De Intelligentie --- (blijft hetzelfde)
-    llm = ChatGroq(...)
+    # --- De Intelligentie ---
+    # We geven de API key hier direct mee. Dit is robuuster.
+    llm = ChatGroq(
+        temperature=0, 
+        model_name="llama3-8b-8192",
+        groq_api_key=_groq_api_key # Zorg dat de key hier wordt meegegeven
+    )
 
-    # --- TOOLS --- (blijft hetzelfde)
-    # ... je code voor sql_tools en rag_tool ...
+    # --- TOOLS ---
+    db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
+    # BELANGRIJK: Geef de LLM ook mee aan de SQL toolkit!
+    sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm) 
+    sql_tools = sql_toolkit.get_tools()
+    
+    # ... (jouw code om de tool beschrijvingen aan te passen blijft hetzelfde) ...
+
+    # --- RAG TOOL ---
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    vectorstore = Chroma(persist_directory=VS_PATH, embedding_function=embeddings)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 12})
+    rag_tool = create_retriever_tool(
+        retriever,
+        "portfolio_analyst_tool",
+        "..." # Jouw beschrijving hier
+    )
     all_tools = sql_tools + [rag_tool]
 
     # --- DE PROMPT ---
-    # We passen de prompt aan. Deze nieuwe prompt heeft een placeholder voor 'chat_history'.
     prompt = hub.pull("hwchase17/react-chat-conversational")
     
-    # --- HET GEHEUGEN --- (NIEUW)
-    # We maken een geheugen-object aan. `memory_key="chat_history"` moet overeenkomen met de input variabele in de prompt.
+    # --- HET GEHEUGEN ---
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
     # --- De "Manager" (De Agent) ---
@@ -57,14 +75,16 @@ def setup_agent(_groq_api_key):
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=all_tools, 
-        memory=memory, # <-- WE VOEGEN HIER HET GEHEUGEN TOE
+        memory=memory,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10
+        max_iterations=10,
+        # NIEUW: Geef de LLM expliciet mee als er twijfel is
+        llm=llm 
     )
     
     print("Agent succesvol opgezet met geheugen!")
-    return agent_executor # De functie geeft nu de agent executor met geheugen terug
+    return agent_executor
 
 # --- HOOFD APPLICATIE ---
 st.title("🧑‍💼 AgentManagerGPT")
@@ -121,8 +141,6 @@ with st.expander("📊 Bekijk Portfolio Data", expanded=False):
             
     except Exception as e:
         st.error(f"Kon portfolio data niet laden: {e}")
-
-agent_executor = setup_agent(groq_api_key)
 
 # --- CHAT INTERFACE ---
 if "messages" not in st.session_state:
