@@ -95,8 +95,8 @@ agent_executor = AgentExecutor(
     llm=llm 
     )
     
-    print("Agent succesvol opgezet met geheugen!")
-    return agent_executor
+print("Agent succesvol opgezet met geheugen!")
+return agent_executor
 
 # --- HOOFD APPLICATIE ---
 st.title("🧑‍💼 AgentManagerGPT")
