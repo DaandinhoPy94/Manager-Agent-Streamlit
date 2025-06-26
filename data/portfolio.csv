@@ -1,0 +1,51 @@
+Address,Type,Value,VacancyRate,AnualIncome,EndLease
+"Singel 13, Eindhoven",Residential,9489709,0.02,334947,2034-07-22
+"Mariastraat 45, Nijmegen",Retail,3066449,0.0,578517,2029-07-29
+"Frederik Hendriklaan 309, Amsterdam",Industrial,8671884,0.11,999796,2029-06-09
+"Spui 302, Eindhoven",Office,7357277,0.1,833557,2030-01-31
+"Damrak 111, Groningen",Office,5112034,0.06,872834,2030-10-28
+"Kinkerstraat 136, Amsterdam",Mixed-use,17415740,0.08,913844,2027-11-07
+"Mariastraat 151, Nijmegen",Logistics,21372723,0.03,265867,2027-06-25
+"Lijnbaan 149, Rotterdam",Residential,5389045,0.06,1070870,2034-02-04
+"Overtoom 84, Groningen",Logistics,9029889,0.1,269741,2033-10-19
+"Kalverstraat 274, Den Haag",Residential,17510878,0.06,580566,2034-08-24
+"Van Woustraat 29, Den Haag",Office,12584847,0.06,258807,2029-05-02
+"Amstelveenseweg 162, Den Haag",Mixed-use,18751421,0.06,1082282,2028-07-27
+"De Meent 72, Den Haag",Mixed-use,20836388,0.08,1018490,2033-07-06
+"Binnenweg 186, Den Haag",Residential,19096865,0.07,218810,2028-03-13
+"Damrak 322, Utrecht",Mixed-use,16165337,0.09,926915,2031-04-01
+"Kinkerstraat 240, Arnhem",Logistics,20563180,0.13,144077,2034-08-06
+"Singel 350, Arnhem",Logistics,23507109,0.05,735514,2031-11-04
+"Kalverstraat 233, Amsterdam",Mixed-use,10837869,0.15,494660,2032-08-29
+"Singel 321, Eindhoven",Mixed-use,19034339,0.09,440527,2031-02-28
+"Kalverstraat 277, Arnhem",Office,22097245,0.05,160845,2028-03-22
+"Overtoom 158, Den Haag",Office,10082309,0.13,285165,2027-12-05
+"Noordeinde 36, Arnhem",Residential,6308102,0.1,466296,2029-12-09
+"Frederik Hendriklaan 311, Leiden",Residential,20095773,0.11,541844,2034-12-18
+"Geldersekade 205, Groningen",Retail,19366963,0.07,639895,2029-06-27
+"Prinsengracht 174, Amsterdam",Industrial,20586522,0.03,581829,2027-01-18
+"Prinsengracht 324, Amsterdam",Residential,4261579,0.14,812958,2027-10-06
+"Frederik Hendriklaan 122, Eindhoven",Mixed-use,18287807,0.03,397478,2035-01-29
+"Amstelveenseweg 296, Haarlem",Residential,17870338,0.12,519318,2028-01-10
+"Singel 338, Leiden",Logistics,16212940,0.06,233605,2034-07-09
+"Singel 32, Leiden",Mixed-use,13385106,0.12,349153,2029-10-03
+"Coolsingel 98, Arnhem",Retail,6703737,0.06,704151,2032-02-26
+"Lijnbaan 39, Haarlem",Industrial,5285271,0.01,150949,2028-01-06
+"Lijnbaan 86, Leiden",Retail,18151708,0.03,961042,2027-08-17
+"Kalverstraat 195, Amsterdam",Retail,10898737,0.14,1074221,2030-03-02
+"Hoogstraat 285, Haarlem",Residential,8371915,0.04,242648,2033-06-18
+"Mariastraat 32, Groningen",Office,3682497,0.09,1174553,2032-12-03
+"Kalverstraat 30, Arnhem",Office,8235251,0.01,262524,2034-07-16
+"Lijnbaan 207, Rotterdam",Industrial,10261616,0.09,203344,2033-11-29
+"Prinsengracht 215, Nijmegen",Industrial,19541677,0.05,666865,2029-04-04
+"Van Woustraat 123, Eindhoven",Retail,6391546,0.1,749139,2032-02-04
+"Van Woustraat 38, Amsterdam",Retail,22842645,0.15,329675,2027-10-16
+"Mariastraat 110, Arnhem",Logistics,6444504,0.14,264265,2029-09-15
+"Overtoom 146, Utrecht",Retail,20227370,0.11,136406,2034-06-16
+"Mariastraat 154, Rotterdam",Residential,10874003,0.02,344470,2035-04-17
+"Mariastraat 80, Eindhoven",Logistics,22294721,0.03,839072,2029-04-01
+"De Meent 259, Haarlem",Logistics,3704528,0.01,1008302,2030-01-26
+"Herengracht 2, Groningen",Residential,23377977,0.15,458861,2035-04-13
+"Spui 283, Leiden",Industrial,2324461,0.02,432589,2033-01-31
+"Herengracht 190, Nijmegen",Industrial,6969202,0.06,207721,2030-06-04
+"Overtoom 21, Groningen",Residential,24886360,0.04,335573,2030-12-07
