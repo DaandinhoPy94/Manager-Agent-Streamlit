@@ -13,6 +13,7 @@ import sys, pysqlite3               # vervangt oude sqlite op Linux
 sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 # ---------------------------------------------------------------------------
 from langchain.agents import AgentExecutor, create_react_agent
+from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
@@ -31,75 +32,39 @@ VS_PATH = os.path.join(ROOT_DIR, 'vectorstore')
 @st.cache_resource
 def setup_agent(_groq_api_key):
     """
-    Zet de volledige agent op met beide tools. Deze functie wordt eenmalig uitgevoerd.
+    Zet de volledige agent op met beide tools EN geheugen.
     """
     print("Agent wordt opgezet...")
     
-    # --- De Intelligentie ---
-    # Terug naar het slimmere model voor betere redenatie
-    llm = ChatGroq(
-        temperature=0, 
-        model_name="llama3-8b-8192",  # Terug naar het slimmere model
-        groq_api_key=_groq_api_key,
-        max_tokens=1000  # Iets meer ruimte voor redeneren
-    )
+    # --- De Intelligentie --- (blijft hetzelfde)
+    llm = ChatGroq(...)
 
-    # --- TOOL 1: De "Archivaris" (SQL Specialist) ---
-    db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
-    sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-    sql_tools = sql_toolkit.get_tools()
-    
-    # Voeg beschrijvingen toe aan de belangrijkste SQL tools
-    for tool in sql_tools:
-        if tool.name == "sql_db_query":
-            tool.description = """Gebruik deze tool voor SQL queries op de 'portfolio' tabel.
-            De tabel heeft deze kolommen: id, address, type, value, vacancyrate, anualincome, endlease.
-            Voorbeelden:
-            - SELECT COUNT(*) FROM portfolio
-            - SELECT SUM(value) FROM portfolio WHERE address LIKE '%Amsterdam%'
-            - SELECT AVG(vacancyrate) FROM portfolio
-            BELANGRIJK: De tabel heet 'portfolio', NIET 'panden'!"""
-        elif tool.name == "sql_db_list_tables":
-            tool.description = "Lijst alle tabellen. Er is één tabel: 'portfolio'"
-        elif tool.name == "sql_db_schema":
-            tool.description = "Schema van de 'portfolio' tabel bekijken"
-
-    # --- TOOL 2: De "Analist" (RAG Specialist) ---
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vectorstore = Chroma(persist_directory=VS_PATH, embedding_function=embeddings)
-    
-    # Adaptieve retriever: 12 documenten (balans voor het zwaardere model)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 12})
-
-    # Maak de RAG-tool
-    # Deze tool kan de vectorstore doorzoeken en een antwoord formuleren
-    rag_tool = create_retriever_tool(
-        retriever,
-        "portfolio_analyst_tool",
-        """Gebruik deze tool voor semantische zoekopdrachten, open vragen, risico-analyses, en meningen over specifieke groepen panden.
-        Voor totale portfolio samenvattingen of statistieken over ALLE panden, gebruik liever SQL tools.
-        Deze tool geeft maximaal 15 relevante panden terug.""",
-    )
-
-    # Combineer de tools van beide specialisten
+    # --- TOOLS --- (blijft hetzelfde)
+    # ... je code voor sql_tools en rag_tool ...
     all_tools = sql_tools + [rag_tool]
 
-    # --- De "Manager" (De Agent) ---
-    # We halen een standaard "ReAct" prompt op
-    prompt = hub.pull("hwchase17/react-chat")
+    # --- DE PROMPT ---
+    # We passen de prompt aan. Deze nieuwe prompt heeft een placeholder voor 'chat_history'.
+    prompt = hub.pull("hwchase17/react-chat-conversational")
     
+    # --- HET GEHEUGEN --- (NIEUW)
+    # We maken een geheugen-object aan. `memory_key="chat_history"` moet overeenkomen met de input variabele in de prompt.
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+    # --- De "Manager" (De Agent) ---
     agent = create_react_agent(llm, all_tools, prompt)
     
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=all_tools, 
-        verbose=True, # Laat de gedachtegang zien in de terminal
+        memory=memory, # <-- WE VOEGEN HIER HET GEHEUGEN TOE
+        verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10  # Verhoogd van 5 naar 10 om timeouts te voorkomen
+        max_iterations=10
     )
     
-    print("Agent succesvol opgezet!")
-    return agent_executor
+    print("Agent succesvol opgezet met geheugen!")
+    return agent_executor # De functie geeft nu de agent executor met geheugen terug
 
 # --- HOOFD APPLICATIE ---
 st.title("🧑‍💼 AgentManagerGPT")
@@ -222,7 +187,8 @@ if prompt := st.chat_input("Stel een vraag over de portefeuille..."):
             
             while retry_count < max_retries:
                 try:
-                    response = agent_executor.invoke({"input": prompt, "chat_history": []})
+                    # De 'chat_history' wordt nu dynamisch gevuld vanuit st.session_state
+                    response = agent_executor.invoke({"input": prompt, "chat_history": st.session_state.messages})
                     answer = response.get("output", "Sorry, ik kon geen antwoord vinden.")
                     
                     # Check of de agent gestopt is door iteration limit
