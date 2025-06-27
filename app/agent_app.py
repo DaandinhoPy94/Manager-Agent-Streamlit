@@ -112,7 +112,7 @@ def setup_agent(_groq_api_key):
         memory=memory,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5,
+        max_iterations=10,
         return_intermediate_steps=False
     )
 
