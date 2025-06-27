@@ -1,5 +1,5 @@
 # ==============================================================================
-# VOLLEDIGE, CORRECTE CODE VOOR app/agent_app.py
+# WERKENDE CODE VOOR app/agent_app.py MET GEHEUGEN
 # ==============================================================================
 
 import streamlit as st
@@ -7,25 +7,21 @@ import os
 import pandas as pd
 import time
 import re
+import sys
 
 # --- PADEN CONFIGURATIE ---
-# Dit zorgt ervoor dat de paden altijd kloppen, zowel lokaal als op Streamlit.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.join(SCRIPT_DIR, '..')
 
 # --- SQLITE FIX VOOR STREAMLIT CLOUD ---
-import sys
 import platform
 
-# Alleen op Linux-systemen (zoals Streamlit Cloud) de sqlite3 module vervangen.
-# Op Windows en macOS wordt dit blok overgeslagen.
 if platform.system() == "Linux":
     import pysqlite3
     sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 # --- LANGCHAIN IMPORTS ---
 from langchain.agents import AgentExecutor, create_structured_chat_agent
-from langchain.agents.structured_chat.prompt import render_structured_chat_prompt
 from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
@@ -34,6 +30,7 @@ from langchain_groq import ChatGroq
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.prompts import PromptTemplate
 
 # --- PAGINA CONFIGURATIE ---
 st.set_page_config(page_title="AgentManagerGPT", page_icon="🧑‍💼", layout="wide")
@@ -42,12 +39,58 @@ st.set_page_config(page_title="AgentManagerGPT", page_icon="🧑‍💼", layout
 DB_PATH = os.path.join(ROOT_DIR, 'data', 'portfolio.db')
 VS_PATH = os.path.join(ROOT_DIR, 'vectorstore')
 
+# --- CUSTOM PROMPT VOOR STRUCTURED CHAT AGENT MET GEHEUGEN ---
+STRUCTURED_CHAT_PROMPT = """You are a helpful assistant that helps analyze a real estate portfolio.
+
+You have access to the following tools:
+{tools}
+
+Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input).
+
+Valid "action" values: "Final Answer" or {tool_names}
+
+Provide only ONE action per $JSON_BLOB, as shown:
+
+```
+{{
+  "action": $TOOL_NAME,
+  "action_input": $INPUT
+}}
+```
+
+Follow this format:
+
+Question: input question to answer
+Thought: consider previous and subsequent steps
+Action:
+```
+$JSON_BLOB
+```
+Observation: action result
+... (repeat Thought/Action/Observation N times)
+Thought: I know what to respond
+Action:
+```
+{{
+  "action": "Final Answer",
+  "action_input": "Final response to human"
+}}
+```
+
+Begin! Reminder to ALWAYS respond with a valid json blob of a single action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation
+
+Previous conversation history:
+{chat_history}
+
+Question: {input}
+{agent_scratchpad}"""
+
 @st.cache_resource
 def setup_agent(_groq_api_key):
     """
     Zet de volledige agent op met beide tools EN geheugen.
     """
-    print("Agent wordt opgezet...")
+    print("Agent wordt opgezet met geheugen...")
 
     # --- De Intelligentie ---
     llm = ChatGroq(
@@ -81,21 +124,21 @@ def setup_agent(_groq_api_key):
     )
     all_tools = sql_tools + [rag_tool]
 
-    # --- DE PROMPT ---
-    # We bouwen de prompt dynamisch op basis van de tools.
-    # Dit zorgt ervoor dat de 'tools' en 'tool_names' variabelen correct worden gevuld.
-    prompt = render_structured_chat_prompt(
-        tools=all_tools,
-        # Voeg de conversationele placeholders toe
-        input_variables=["input", "chat_history"],
-        memory_prompts=[MessagesPlaceholder("chat_history", optional=True)],
-)
+    # --- DE PROMPT MET GEHEUGEN ---
+    prompt = PromptTemplate.from_template(STRUCTURED_CHAT_PROMPT)
+    
     # --- HET GEHEUGEN ---
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    memory = ConversationBufferMemory(
+        memory_key="chat_history", 
+        return_messages=True
+    )
 
-    # --- De "Manager" (De Agent) ---
-    # We gebruiken create_structured_chat_agent, die beter omgaat met complexe tools en prompts.
-    agent = create_structured_chat_agent(llm, all_tools, prompt)
+    # --- De Agent ---
+    agent = create_structured_chat_agent(
+        llm=llm, 
+        tools=all_tools, 
+        prompt=prompt
+    )
 
     agent_executor = AgentExecutor(
         agent=agent,
@@ -103,8 +146,7 @@ def setup_agent(_groq_api_key):
         memory=memory,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10,
-        llm=llm
+        max_iterations=10
     )
 
     print("Agent succesvol opgezet met geheugen!")
@@ -114,18 +156,13 @@ def setup_agent(_groq_api_key):
 st.title("🧑‍💼 AgentManagerGPT")
 st.markdown("Stel een vraag aan de Onderzoeksmanager. Hij kiest de juiste specialist voor de klus.")
 
-# --- DEFINITIEVE, ROBUUSTE API KEY HANDLING ---
-
-# Voeg deze imports toe bovenaan je script, bij de andere imports
+# --- API KEY HANDLING ---
 from dotenv import load_dotenv
 import os
-
-# ... (in de body van je script, na de imports) ...
 
 groq_api_key = ""
 
 # EERSTE POGING: Streamlit Cloud Secrets (voor productie)
-# os.environ.get("STREAMLIT_SERVER_ENABLED") is een betrouwbare manier om te checken of we op de cloud draaien.
 if os.environ.get("STREAMLIT_SERVER_ENABLED"):
     try:
         groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -136,7 +173,7 @@ if os.environ.get("STREAMLIT_SERVER_ENABLED"):
 
 # TWEEDE POGING: Lokaal .env bestand (voor ontwikkeling)
 else:
-    load_dotenv() # Simpele aanroep, laadt .env uit de hoofdmap
+    load_dotenv()
     groq_api_key = os.getenv("GROQ_API_KEY")
     if groq_api_key:
         st.sidebar.success("✅ API Key geladen via lokaal .env bestand!")
@@ -153,8 +190,6 @@ else:
 if not groq_api_key:
     st.info("API Key is vereist. Voer deze in via de sidebar of een .env bestand.")
     st.stop()
-
-
 
 # Belangrijk: De setup_agent functie moet NU pas worden aangeroepen
 agent_executor = setup_agent(groq_api_key)
@@ -194,7 +229,7 @@ with st.sidebar:
     
     if st.button("🔄 Clear Chat & Memory"):
         st.session_state.messages = []
-        # Dit is een truc om de @st.cache_resource te resetten
+        # Reset de agent (en daarmee het geheugen)
         st.cache_resource.clear()
         st.rerun()
 
@@ -212,15 +247,15 @@ if prompt := st.chat_input("Stel een vraag over de portefeuille..."):
     with st.chat_message("assistant"):
         with st.spinner("De manager is aan het overleggen met zijn team..."):
             try:
-                # Roep de agent aan met de input en de chat geschiedenis
+                # Roep de agent aan - het geheugen wordt automatisch beheerd door de AgentExecutor
                 response = agent_executor.invoke({
-                    "input": prompt,
-                    "chat_history": st.session_state.messages
+                    "input": prompt
                 })
                 answer = response.get("output", "Sorry, ik kon geen antwoord vinden.")
 
             except Exception as e:
-                answer = f"Er is een onverwachte fout opgetreden: {e}"
+                answer = f"Er is een fout opgetreden: {str(e)}"
+                st.error(f"Debug info: {e}")
             
             st.markdown(answer)
 
