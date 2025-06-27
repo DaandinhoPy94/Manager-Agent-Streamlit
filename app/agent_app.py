@@ -1,27 +1,24 @@
 # ==============================================================================
-# WERKENDE CODE VOOR app/agent_app.py MET GEHEUGEN
+# STABIELE WERKENDE CODE MET GEHEUGEN
 # ==============================================================================
 
 import streamlit as st
 import os
 import pandas as pd
-import time
-import re
 import sys
+import platform
 
 # --- PADEN CONFIGURATIE ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.join(SCRIPT_DIR, '..')
 
 # --- SQLITE FIX VOOR STREAMLIT CLOUD ---
-import platform
-
 if platform.system() == "Linux":
     import pysqlite3
     sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
 # --- LANGCHAIN IMPORTS ---
-from langchain.agents import AgentExecutor, create_structured_chat_agent
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
@@ -29,8 +26,8 @@ from langchain_community.utilities import SQLDatabase
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.prompts import PromptTemplate
+from langchain import hub
 
 # --- PAGINA CONFIGURATIE ---
 st.set_page_config(page_title="AgentManagerGPT", page_icon="🧑‍💼", layout="wide")
@@ -39,224 +36,178 @@ st.set_page_config(page_title="AgentManagerGPT", page_icon="🧑‍💼", layout
 DB_PATH = os.path.join(ROOT_DIR, 'data', 'portfolio.db')
 VS_PATH = os.path.join(ROOT_DIR, 'vectorstore')
 
-# --- CUSTOM PROMPT VOOR STRUCTURED CHAT AGENT MET GEHEUGEN ---
-STRUCTURED_CHAT_PROMPT = """You are a helpful assistant that helps analyze a real estate portfolio.
+# --- CUSTOM PROMPT MET GEHEUGEN ---
+REACT_PROMPT_WITH_MEMORY = """You are a helpful assistant that helps analyze a real estate portfolio database.
 
 You have access to the following tools:
 {tools}
 
-Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input).
-
-Valid "action" values: "Final Answer" or {tool_names}
-
-Provide only ONE action per $JSON_BLOB, as shown:
-
-```
-{{
-  "action": $TOOL_NAME,
-  "action_input": $INPUT
-}}
-```
-
-Follow this format:
-
-Question: input question to answer
-Thought: consider previous and subsequent steps
-Action:
-```
-$JSON_BLOB
-```
-Observation: action result
-... (repeat Thought/Action/Observation N times)
-Thought: I know what to respond
-Action:
-```
-{{
-  "action": "Final Answer",
-  "action_input": "Final response to human"
-}}
-```
-
-Begin! Reminder to ALWAYS respond with a valid json blob of a single action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation
-
-Previous conversation history:
+Previous conversation:
 {chat_history}
 
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Remember to use the conversation history to understand context from previous questions.
+
 Question: {input}
-{agent_scratchpad}"""
+Thought: {agent_scratchpad}"""
 
 @st.cache_resource
 def setup_agent(_groq_api_key):
     """
-    Zet de volledige agent op met beide tools EN geheugen.
+    Zet een werkende agent op met geheugen.
     """
-    print("Agent wordt opgezet met geheugen...")
+    print("Agent wordt opgezet met geheugen (stabiele versie)...")
 
-    # --- De Intelligentie ---
+    # --- LLM ---
     llm = ChatGroq(
         temperature=0,
         model_name="llama3-8b-8192",
         groq_api_key=_groq_api_key
     )
 
-    # --- TOOL 1: SQL Specialist ---
+    # --- SQL Tools ---
     db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
     sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm)
     sql_tools = sql_toolkit.get_tools()
 
-    # Voeg tool beschrijvingen toe
-    for tool in sql_tools:
-        if tool.name == "sql_db_query":
-            tool.description = "Gebruik deze tool voor SQL queries op de 'portfolio' tabel. Kolommen: id, address, type, value, vacancyrate, anualincome, endlease."
-        elif tool.name == "sql_db_list_tables":
-            tool.description = "Lijst alle tabellen. Er is één tabel: 'portfolio'"
-        elif tool.name == "sql_db_schema":
-            tool.description = "Schema van de 'portfolio' tabel bekijken"
-
-    # --- TOOL 2: RAG Specialist ---
+    # --- RAG Tool ---
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = Chroma(persist_directory=VS_PATH, embedding_function=embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 12})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    
     rag_tool = create_retriever_tool(
         retriever,
-        "portfolio_analyst_tool",
-        "Gebruik deze tool voor semantische zoekopdrachten, open vragen, risico-analyses, en meningen over specifieke groepen panden."
+        "portfolio_search",
+        "Zoek semantisch in de portfolio database voor algemene vragen en analyses."
     )
+    
     all_tools = sql_tools + [rag_tool]
 
-    # --- DE PROMPT MET GEHEUGEN ---
-    prompt = PromptTemplate.from_template(STRUCTURED_CHAT_PROMPT)
-    
-    # --- HET GEHEUGEN ---
+    # --- Prompt met geheugen ---
+    prompt = PromptTemplate.from_template(REACT_PROMPT_WITH_MEMORY)
+
+    # --- Geheugen ---
     memory = ConversationBufferMemory(
-        memory_key="chat_history", 
-        return_messages=True
+        memory_key="chat_history",
+        return_messages=False,  # Gebruik string format voor simpliciteit
+        output_key="output"
     )
 
-    # --- De Agent ---
-    agent = create_structured_chat_agent(
-        llm=llm, 
-        tools=all_tools, 
-        prompt=prompt
-    )
-
+    # --- Agent ---
+    agent = create_react_agent(llm, all_tools, prompt)
+    
     agent_executor = AgentExecutor(
         agent=agent,
         tools=all_tools,
         memory=memory,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10
+        max_iterations=5,
+        return_intermediate_steps=False
     )
 
-    print("Agent succesvol opgezet met geheugen!")
+    print("Agent succesvol opgezet!")
     return agent_executor
 
 # --- HOOFD APPLICATIE ---
 st.title("🧑‍💼 AgentManagerGPT")
-st.markdown("Stel een vraag aan de Onderzoeksmanager. Hij kiest de juiste specialist voor de klus.")
+st.markdown("Stel een vraag aan de Manager. Hij onthoudt nu je eerdere vragen!")
 
 # --- API KEY HANDLING ---
 from dotenv import load_dotenv
-import os
 
 groq_api_key = ""
 
-# EERSTE POGING: Streamlit Cloud Secrets (voor productie)
 if os.environ.get("STREAMLIT_SERVER_ENABLED"):
     try:
         groq_api_key = st.secrets["GROQ_API_KEY"]
-        st.sidebar.success("✅ API Key geladen via Streamlit Secrets!")
+        st.sidebar.success("✅ API Key geladen!")
     except KeyError:
-        st.sidebar.error("❌ Geen API Key gevonden in Streamlit Secrets!")
+        st.sidebar.error("❌ Geen API Key gevonden!")
         st.stop()
-
-# TWEEDE POGING: Lokaal .env bestand (voor ontwikkeling)
 else:
     load_dotenv()
     groq_api_key = os.getenv("GROQ_API_KEY")
     if groq_api_key:
-        st.sidebar.success("✅ API Key geladen via lokaal .env bestand!")
+        st.sidebar.success("✅ API Key geladen!")
     else:
-        # LAATSTE REDMIDDEL: Handmatige invoer
-        st.sidebar.warning("Geen .env bestand gevonden. Voer key handmatig in.")
-        groq_api_key = st.sidebar.text_input(
-            "Voer je Groq API Key in:",
-            type="password",
-            key="local_api_key"
-        )
+        st.sidebar.warning("Voer je API key in:")
+        groq_api_key = st.sidebar.text_input("Groq API Key:", type="password")
 
-# Stop de app als er na alle pogingen nog steeds geen key is.
 if not groq_api_key:
-    st.info("API Key is vereist. Voer deze in via de sidebar of een .env bestand.")
+    st.info("API Key is vereist.")
     st.stop()
 
-# Belangrijk: De setup_agent functie moet NU pas worden aangeroepen
+# Setup agent
 agent_executor = setup_agent(groq_api_key)
 
-# --- PORTFOLIO TABEL WEERGEVEN ---
-with st.expander("📊 Bekijk Portfolio Data", expanded=False):
+# --- PORTFOLIO DATA VIEWER ---
+with st.expander("📊 Portfolio Data", expanded=False):
     try:
-        csv_path = os.path.join(ROOT_DIR, 'data', 'portfolio.csv')
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(os.path.join(ROOT_DIR, 'data', 'portfolio.csv'))
         df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
-        st.dataframe(df, use_container_width=True, height=400)
-
+        st.dataframe(df, use_container_width=True)
+        
         col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Totaal aantal panden", len(df))
-        with col2:
-            st.metric("Totale waarde", f"€{df['value'].sum():,.0f}")
-        with col3:
-            st.metric("Gem. leegstand", f"{df['vacancyrate'].mean()*100:.1f}%")
-        with col4:
-            st.metric("Totale jaarinkomsten", f"€{df['anualincome'].sum():,.0f}")
-
+        col1.metric("Panden", len(df))
+        col2.metric("Totale waarde", f"€{df['value'].sum():,.0f}")
+        col3.metric("Gem. leegstand", f"{df['vacancyrate'].mean()*100:.1f}%")
+        col4.metric("Jaarinkomsten", f"€{df['anualincome'].sum():,.0f}")
     except Exception as e:
-        st.error(f"Kon portfolio data niet laden: {e}")
+        st.error(f"Fout: {e}")
 
 # --- CHAT INTERFACE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Sidebar met voorbeeldvragen en controls
+# Sidebar
 with st.sidebar:
-    st.header("💡 Voorbeeldvragen")
-    st.code("Wat is de totale waarde van alle panden in Arnhem?")
-    st.code("Welke panden in Amsterdam hebben risico's?")
+    st.header("💡 Tips")
+    st.info("""
+    **Met geheugen!** Probeer:
+    1. "Hoeveel panden zijn er in Amsterdam?"
+    2. "Wat is de totale waarde daarvan?"
+    3. "En de gemiddelde leegstand?"
     
-    st.divider()
+    De agent onthoudt nu je context!
+    """)
     
-    if st.button("🔄 Clear Chat & Memory"):
+    if st.button("🔄 Reset Geheugen"):
         st.session_state.messages = []
-        # Reset de agent (en daarmee het geheugen)
         st.cache_resource.clear()
         st.rerun()
 
-# Toon oude berichten
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Toon berichten
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-# Ontvang en verwerk nieuwe input
-if prompt := st.chat_input("Stel een vraag over de portefeuille..."):
+# Chat input
+if prompt := st.chat_input("Vraag iets over de portfolio..."):
+    # Voeg toe aan geschiedenis
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.markdown(prompt)
-
+        st.write(prompt)
+    
+    # Get response
     with st.chat_message("assistant"):
-        with st.spinner("De manager is aan het overleggen met zijn team..."):
+        with st.spinner("Aan het nadenken..."):
             try:
-                # Roep de agent aan - het geheugen wordt automatisch beheerd door de AgentExecutor
-                response = agent_executor.invoke({
-                    "input": prompt
-                })
-                answer = response.get("output", "Sorry, ik kon geen antwoord vinden.")
-
+                response = agent_executor.invoke({"input": prompt})
+                answer = response.get("output", "Geen antwoord gevonden.")
             except Exception as e:
-                answer = f"Er is een fout opgetreden: {str(e)}"
-                st.error(f"Debug info: {e}")
-            
-            st.markdown(answer)
-
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+                answer = f"Er ging iets mis: {str(e)}"
+                st.error(f"Debug: {e}")
+        
+        st.write(answer)
+        st.session_state.messages.append({"role": "assistant", "content": answer})
